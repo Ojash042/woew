@@ -1,2 +1,2 @@
 # woew
-App Launcher For Linxu
+App Launcher For Linux

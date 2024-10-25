@@ -1,0 +1,22 @@
+@define-color background-color #1e1e2e;
+@define-color accent-color #74c7ec;
+@define-color text-color #cdd6f4;
+@define-color subtext-color #bac2de;
+
+window{
+    border-radius: 14px;
+    border: 1px solid @accent-color;
+    background-color: @background-color;
+}
+
+entry {
+    padding: 1.3rem;
+    color: @accent-color;
+    font-size: 1.7rem; 
+    text-shadow:
+        1px 1px 0px alpha(@accent-color, 0.15),
+        -1px -1px 0px alpha(@accent-color, 0.15),
+        1px -1px 0px alpha(@accent-color, 0.15),
+        -1px 1px 0px alpha(@accent-color, 0.15),
+
+}

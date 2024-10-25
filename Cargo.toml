@@ -1,0 +1,9 @@
+[package]
+name = "woew"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gtk = { version = "0.9.2", package = "gtk4", features = ["v4_16"] }
+log = "0.4.22"
+simple-logging = "2.0.2"
