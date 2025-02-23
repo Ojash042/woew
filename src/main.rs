@@ -1,6 +1,4 @@
-use std::{cell::RefCell, env, fs, rc::Rc};
-use log::{LevelFilter, trace, info};
-use simple_logging::log_to_file;
+use std::{cell::RefCell, env, fs, path::Path, rc::Rc};
 use gtk::{gdk::Display, glib, prelude::*, Application, ApplicationWindow, CssProvider, EventControllerFocus};
 
 const APP_ID: &str = "org.woew.woew";
@@ -14,11 +12,55 @@ struct AppDetail {
     keyword: Vec<String>
 }
 
+fn check_valid_desktop_entry(exec_command: &str) -> bool{
+    let path: &str; 
+    let exec_field_codes = vec!["%f", "%S", "%u", "%U", "%d", "%D", "%N", "%n", "%i", "%c", "%k", "%v", "%m"];
+    // Assume Flatpak is always right
+    if exec_command.starts_with("flatpak"){ return true };
+
+    if exec_field_codes.iter().any(|code| exec_command.contains(code)) {
+        return check_valid_desktop_entry(exec_command.split("%").nth(0).unwrap());
+    }
+
+    if exec_command.contains("\""){
+        path = exec_command.split("\"").nth(1).unwrap();  
+    }
+    else{
+        path = exec_command; 
+    }
+
+    println!("Path={}", path);
+
+    if Path::new(path).exists(){  
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+
 /// Walks through directory recursively searching for .desktop file 
 fn walk_dir(start_dir: &str) -> (){
     let current_directory_items = fs::read_dir(start_dir).expect("Could Not find the supplied directory");
     for entry in current_directory_items{
         let entry_path = entry.unwrap();
+        
+        if fs::metadata(entry_path.path()).unwrap().is_file(){
+            let contents = fs::read_to_string(entry_path.path())
+                .expect(format!("Error: File {} could not be read", entry_path.path().to_str().unwrap()).as_str());
+
+            let lines = contents.split("\n");
+            for line in lines {
+                let pair:Vec<&str> = line.split("=").collect() ;
+                if pair.first().unwrap().to_string() == "Exec" {
+                    let exec_command = pair.last().unwrap().to_string();
+                    let validity = check_valid_desktop_entry(exec_command.as_str());
+                    println!("{}: VALID {}\n", exec_command, validity);
+                }
+                // let exec_command = line.split("Exec="); 
+            }
+        }
         print!("{}: ", 
             entry_path.path().to_str().unwrap(),
         );
@@ -55,7 +97,6 @@ fn startup_call() -> AppDetail{
 }
 
 fn build_ui(app: &Application) ->  (){
-    // TODO: Set Decorated -> false
     let height_mult = 1;
     let provider = CssProvider::new();
     provider.load_from_path("./style/woew_window_style.css");
@@ -70,11 +111,7 @@ fn build_ui(app: &Application) ->  (){
 
     let focus_controller = EventControllerFocus::builder().build();
 
-
-    log_to_file("/home/ojash/Projects/rust/woew/woew.log", LevelFilter::Info).unwrap();
-
     println!("App Starting...");
-
 
     let window = Rc::new(RefCell::new(ApplicationWindow::builder()
         .application(app)
@@ -90,14 +127,11 @@ fn build_ui(app: &Application) ->  (){
         .hide_on_close(true)
         .build()));
 
-
-
     let win_clone = window.clone();
     let win_focus_clone = window.clone();
 
     focus_controller.connect_leave(move |focus| {
         if !focus.is_focus() { 
-            info!("Focus Gained");
             win_focus_clone.try_borrow_mut().unwrap().close();
         } 
     });
@@ -106,14 +140,14 @@ fn build_ui(app: &Application) ->  (){
         match key {
             gtk::gdk::Key::Escape => {
                 println!("ESC Pressed");
-                info!("ESC pressed");
                 win_clone.try_borrow_mut().unwrap().close();
-                //std::process::exit(0);
+                // std::process::exit(0);
             }
             _ => ()
         }
         return glib::Propagation::Proceed;
     });
+
     window.try_borrow_mut().unwrap().add_controller(event_controller);
     window.try_borrow_mut().unwrap().add_controller(focus_controller);
 
@@ -126,7 +160,6 @@ fn build_ui(app: &Application) ->  (){
 fn main() -> (){
     startup_call();
     let app = Application::builder().application_id(APP_ID).build();
-    println!("WEEEEE");
     app.connect_activate(build_ui);
 
     app.run();
