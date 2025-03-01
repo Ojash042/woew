@@ -1,4 +1,4 @@
-use std::{cell::RefCell, env, fs, path::Path, rc::Rc};
+use std::{cell::RefCell, env, fs::{self, File}, io::{self, BufRead, BufReader, Lines, Read}, path::Path, rc::Rc};
 use gtk::{gdk::Display, glib, prelude::*, Application, ApplicationWindow, CssProvider, EventControllerFocus};
 
 const APP_ID: &str = "org.woew.woew";
@@ -12,25 +12,35 @@ struct AppDetail {
     keyword: Vec<String>
 }
 
+fn check_in_env_path(exec_command: &str) -> bool{
+    let paths = env::split_paths(env::SplitPaths)
+    return true;
+}
 fn check_valid_desktop_entry(exec_command: &str) -> bool{
     let path: &str; 
     let exec_field_codes = vec!["%f", "%S", "%u", "%U", "%d", "%D", "%N", "%n", "%i", "%c", "%k", "%v", "%m"];
     // Assume Flatpak is always right
-    if exec_command.starts_with("flatpak"){ return true };
+    if exec_command.starts_with("flatpak "){ return true };
+    if exec_command.contains(" wine ") { return true };
 
+    exec_command.split(" ").any(|substring| check_in_env_path(substring));
     if exec_field_codes.iter().any(|code| exec_command.contains(code)) {
-        return check_valid_desktop_entry(exec_command.split("%").nth(0).unwrap());
+        return check_valid_desktop_entry(exec_command.split("%").nth(0).unwrap().trim());
     }
 
     if exec_command.contains("\""){
         path = exec_command.split("\"").nth(1).unwrap();  
+        println!("{} contains \\", exec_command);
     }
     else{
         path = exec_command; 
     }
 
-    println!("Path={}", path);
+    // println!("Path={}", path);
 
+    if path.contains("Thunderbird"){
+        println!("{}", Path::new(path).exists());
+    }
     if Path::new(path).exists(){  
         return true;
     }
@@ -39,6 +49,24 @@ fn check_valid_desktop_entry(exec_command: &str) -> bool{
     }
 }
 
+fn read_lines<P>(filename: P) -> io::Result<Lines<BufReader<File>>>
+where P: AsRef<Path>
+{
+    let file = File::open(filename)?;
+    Ok(BufReader::new(file).lines())
+}
+
+fn check_non_hidden_desktop_entry(path: &str) -> bool {
+    if let Ok(lines) = read_lines(path) {
+        for line in lines.map_while(Result::ok){
+            if (line.starts_with("NoDisplay") || line.starts_with("Hidden")) {
+                let value = line.split("=").last().unwrap().trim();
+                if value.to_lowercase() == "true" {return true} else {return false}
+            }
+        }
+    }
+    return true;
+}
 
 /// Walks through directory recursively searching for .desktop file 
 fn walk_dir(start_dir: &str) -> (){
@@ -56,18 +84,21 @@ fn walk_dir(start_dir: &str) -> (){
                 if pair.first().unwrap().to_string() == "Exec" {
                     let exec_command = pair.last().unwrap().to_string();
                     let validity = check_valid_desktop_entry(exec_command.as_str());
-                    println!("{}: VALID {}\n", exec_command, validity);
+                    if validity {
+
+                        println!("VALID {}: {}\n", exec_command, validity);
+                    }
                 }
                 // let exec_command = line.split("Exec="); 
             }
         }
-        print!("{}: ", 
-            entry_path.path().to_str().unwrap(),
-        );
-        print!("{}",
-            fs::metadata(entry_path.path()).unwrap().is_dir()
-        );
-        println!("");
+        // print!("Entry = {}\n", 
+        //     entry_path.path().to_str().unwrap(),
+        // );
+        // print!("IsDir = {}\n",
+        //     fs::metadata(entry_path.path()).unwrap().is_dir()
+        // );
+        // println!("");
     }
 }
 
